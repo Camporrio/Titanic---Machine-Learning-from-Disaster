@@ -1,0 +1,458 @@
+---
+title: "Pràctica 2"
+output:
+  pdf_document: default
+  html_notebook: default
+  html_document:
+    df_print: paged
+---
+
+# Descripció de la pràctica
+
+L’objectiu d’aquesta activitat serà el tractament d’un dataset, que pot ser el creat a la pràctica 1 o bé qualsevol dataset lliure disponible a Kaggle (https://www.kaggle.com). Alguns exemples de dataset amb els que podeu treballar són: 
+
+* Red Wine Quality (https://www.kaggle.com/uciml/red-wine-quality-cortez-et-al-2009 ). 
+* Titanic: Machine Learning from Disaster (https://www.kaggle.com/c/titanic ). 
+
+L’últim exemple correspon a una competició activa a Kaggle de manera que, opcionalment, podeu aprofitar el treball realitzat durant la pràctica per entrar en aquesta competició. 
+
+Seguint les principals etapes d’un projecte analític, les diferents tasques a realitzar (i justificar) són les següents: 
+
+1. Descripció del dataset. Perquè és important i quina pregunta/problema pretén respondre? 
+2. Integració i selecció de les dades d’interès a analitzar. Pot ser el resultat d’addicionar diferents datasets o una subselecció útil de les dades originals, en base a l’objectiu que es vulgui aconseguir. 
+3. Neteja de les dades. 
+3.1. Les dades contenen zeros o elements buits? Gestiona cadascun d’aquests casos. 
+3.2. Identifica i gestiona els valors extrems. 
+4. Anàlisi de les dades. 
+Tipologia i cicle de vida de les dades Pràctica 2 pàg 2
+4.1. Selecció dels grups de dades que es volen analitzar/comparar (p. e., si es volen comparar grups de dades, quins són aquests grups i quins tipus d’anàlisi s’aplicaran?). 
+4.2. Comprovació de la normalitat i homogeneïtat de la variància. 
+4.3. Aplicació de proves estadístiques per comparar els grups de dades. En funció de les dades i de l’objectiu de l’estudi, aplicar proves de contrast d’hipòtesis, correlacions, regressions, etc. Aplicar almenys tres mètodes d’anàlisi diferents. 
+5. Representació dels resultats a partir de taules i gràfiques. Aquest apartat es pot respondre al llarg de la pràctica, sense la necessitat de concentrar totes les representacions en aquest punt de la pràctica. 
+6. Resolució del problema. A partir dels resultats obtinguts, quines són les conclusions? Els resultats permeten respondre al problema? 
+7. Codi: Cal adjuntar el codi, preferiblement en R, amb el que s’ha realitzat la neteja, anàlisi i representació de les dades. Si ho preferiu, també podeu treballar en Python. 
+
+
+# Descripció del dataset
+
+L'enfonsament del Titanic és un dels naufragis més famosos de la història.
+El 15 d'abril de 1912, durant el seu viatge inaugural, el RMS Titanic, àmpliament considerat “inenfonsable”, es va enfonsar després de xocar amb un iceberg. Malauradament, no hi havia suficients bots salvavides per a tots els que estaven a bord, cosa que va provocar la mort de 1.502 dels 2.224 passatgers i la tripulació.
+Tot i que hi va haver algun element de sort involucrat en la supervivència, sembla que alguns grups de persones tenien més probabilitats de sobreviure que altres.
+En base a això volem saber:  "quin tipus de persones tenien més probabilitats de sobreviure?" utilitzant dades de passatgers. Això ens pot donar certa informació envers a propers aconteixements semblants i com es podria actuar amb aquesta informació, trobar tipus de passatgers susceptibles a perdre la vida o a sobreviure.
+El conjunt de dades amb el que treballarem s’ha obtingut mitjançant un enllaç a kaggle i esta dividit en dues parts, les dades de train i les dades de test. Les dues parts contenen les mateixes variables, exceptuant que test no té la variable de si els passatgers van sobreviure o no.
+
+
+```{r}
+#https://cran.r-project.org/web/packages/ggplot2/index.html
+if (!require('ggplot2')) install.packages('ggplot2'); library('ggplot2')
+#https://cran.r-project.org/web/packages/dplyr/index.html
+if (!require('dplyr')) install.packages('dplyr'); library('dplyr')
+if (!require('VIM')) install.packages('VIM'); library('VIM')
+if (!require('epiDisplay')) install.packages('epiDisplay'); library('epiDisplay')
+if (!require('randomForest')) install.packages('randomForest'); library('randomForest')
+if (!require('pROC')) install.packages('pROC'); library('pROC')
+```
+
+Primer es llegeix el dataset 'train.csv', que és el set d'entrenament, per posteriorment llegir 'test.csv'i provar el model predictiu. 
+
+```{r}
+dades <- read.csv('train.csv',stringsAsFactors = FALSE)
+filas=dim(dades)[1]
+```
+
+
+```{r}
+dim(dades)
+```
+El dataset d'entrenament està format per 891 files amb 12 columnes, amb els següents tipus de dades:
+
+```{r}
+str(dades)
+```
+Els atributs del dataset són els següents:
+
+* PassengerId: Número de passatger
+* Survived: Sobreviscut (valor booleà)
+* Pclass: Classe (1 = primera, 2 = segona, 3 = tercera)
+* Name: Nom del passatger
+* Sex: Gènere del passatger
+* Age: Edat del passatger
+* SibSp: Nombre de germans/es a bord del Titanic
+* Parch: Nombre de pares o fills a bord del Titanic
+* Ticket: Número de tiquet
+* Fare: Preu del bitllet del passatger
+* Cabin: Número de camarot
+* Embarked: Port on ha embarcat (C = Cherbourg, Q = Queenstown, S = Southampton)
+
+
+```{r}
+summary(dades)
+```
+
+
+# Integració i selecció de les dades d'interès a analitzar.
+
+Com que el dataset de Kaggle proporciona totes les dades disponibles dels passatgers, no s'ha contemplat cap dataset addicional.
+
+S'ha seleccionat un subset de les dades originals per ometre d'entrada els atributs PassengerId i Ticket, ja que no proporcionen cap informació que es pugui relacionar amb la supervivència dels passatgers. En el següent apartat s'avalua si es prescindeix d'algun altre atribut.
+
+
+```{r}
+dades<-dades[,-c(1,9)]
+```
+
+# Preprocés
+
+En primer lloc s'avalua si hi ha valors buits o NA. 
+
+
+```{r}
+colSums(is.na(dades))
+```
+
+
+```{r}
+colSums(dades=="")
+```
+Principalment hem vist que la variable Age contenia molts valors NA, per ser més precissos contenia 177 valors NA de 891 registres.
+
+Vist això, hem de decidir que fer amb aquests valors, els podriem eliminar pero perdriem registres importants que ens donen informació valuosa.
+De manera que s’ha optat per implementar un mètode d’imputació de valors basat en la similitud o diferencia entre els registres, anomenat ”k-NN-imputation” o k veins més propers. Hem escollit aquest mètode ja que els registres guarden certa relació, tot i que sempre es millor treballar amb dades aproximades que valors buits, ja que tindrem menys marge d’error.
+
+
+
+```{r}
+
+suppressWarnings(suppressMessages(library(VIM)))
+dades$Age<-kNN(dades)$Age
+
+```
+
+
+```{r}
+summary(dades[,"Age"])
+```
+
+Com es pot observar, no hi ha outliers (ja que les edats estan compreses entre 0 i 80), de manera que no es realitza cap operació addicional amb aquest atribut.
+
+
+```{r}
+colSums(is.na(dades))
+```
+
+```{r}
+colSums(dades=="")
+```
+
+Podem veure que ara la variable Age ja no te valors buits ni valors NA, però s’ens afegeix un altre problema. La variable Cabin té 687 registres buits, de manera que obviarem aquesta variable ja que es una variable que no es pot aproximar o predir, perquè no disposem de la informació necessària per fer-ho.
+
+
+```{r}
+dades<-dades[,-c(9)]
+```
+
+Per acabar amb el preprocés, es transforma la variable dicotòmica Survived de (0,1) a ("No","Yes"), i es creen dues variables per estudiar l'edat: el segment d'edat (de 10 en 10 anys) i la variable binària de major o menor d'edat (Adult = 0, 1).
+
+
+```{r}
+dades$Survived[(dades$Survived==1)] <- "Yes"
+dades$Survived[(dades$Survived==0)] <- "No"
+dades["segment_edat"] <- cut(dades$Age, breaks = c(0,10,20,30,40,50,60,70,100), labels = c("0-9", "10-19", "20-29", "30-39","40-49","50-59","60-69","70-79"))
+dades["Adult"] <- cut(dades$Age, breaks = c(0,17.5,100), labels = c(0,1))
+```
+
+A continuació es previsualitzen les primeres files de les dades després del preprocés i s'escriuen en un nou fitxer .csv
+
+```{r}
+head(dades)
+write.csv(dades,"dades_clean.csv")
+```
+
+
+# Exploració de les dades
+
+Per a un coneixement major sobre les dades, que permeti el seu posterior anàlisi, s'utilitzen eines de visualització com ggplot i grid:
+
+```{r}
+if(!require(grid)){
+    install.packages('grid', repos='http://cran.us.r-project.org')
+    library(grid)
+}
+if(!require(gridExtra)){
+    install.packages('gridExtra', repos='http://cran.us.r-project.org')
+    library(gridExtra)
+}
+```
+
+En primer lloc, s'analitza la distribució d'algunes de les variables més rellevants: sexe, grup d'edat, classe i supervivència.
+
+```{r}
+plotbyClass<-ggplot(dades,aes(Pclass))+geom_bar() +labs(x="Pclass", y="Passengers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Class")
+
+plotbyAge<-ggplot(dades,aes(segment_edat))+geom_bar() +labs(x="Age", y="Passengers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Age")
+
+plotbySex<-ggplot(dades,aes(Sex))+geom_bar() +labs(x="Sex", y="Passengers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Sex")
+
+plotbySurvived<-ggplot(dades,aes(Survived))+geom_bar() +labs(x="Survived", y="Passengers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("blue","#008000"))+ggtitle("Survived")
+
+plotbyClass
+plotbyAge
+plotbySex
+plotbySurvived
+```
+
+Com es pot veure, la major part dels passatgers eren homes, viatjaven en tercera classe, tenien una edat d'uns 30 anys i no van sobreviure.
+
+És interessant veure, sobre els mateixos gràfics, la proporció de passatgers que van sobreviure respecte el valor de cada atribut, ja que dona una primera aproximació als determinants de la supervivència dels passatgers:
+
+```{r}
+grid.newpage()
+plotbyClass<-ggplot(dades,aes(Pclass,fill=Survived))+geom_bar() +labs(x="Class", y="Passengers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("black","#008000"))+ggtitle("Survived by Class")
+plotbyAge<-ggplot(dades,aes(segment_edat,fill=Survived))+geom_bar() +labs(x="Age", y="Passengers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("black","#008000"))+ggtitle("Survived by Age")
+plotbySex<-ggplot(dades,aes(Sex,fill=Survived))+geom_bar() +labs(x="Sex", y="Passengers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("black","#008000"))+ggtitle("Survived by Sex")
+plotbyEmbarked<-ggplot(dades,aes(Embarked,fill=Survived))+geom_bar() +labs(x="Embarked", y="Passengers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("black","#008000"))+ggtitle("Survived by Sex")
+plotbyClass
+plotbyAge
+plotbySex
+plotbyEmbarked
+```
+
+Aquests gràfics evidencien fets coneguts popularment, com que es va prioritzar el salvament de dones i nens, i que els passatgers amb més supervivència van ser els de les classes superiors.
+
+Obtenim ara una matriu de percentatges de freqüència. Veiem, per exemple que la probabilitat de sobreviure si es va embarcar en “C” és d’un 55.35%, o si es va embarcar en "Q" és d'un 38.96%
+
+```{r}
+t<-table(dades[1:filas,]$Embarked,dades[1:filas,]$Survived)
+for (i in 1:dim(t)[1]){
+    t[i,]<-t[i,]/sum(t[i,])*100
+}
+t
+```
+
+Vegem ara com en un mateix gràfic de freqüències podem treballar amb 3 variables: Embarked, Survived i class.
+
+Mostrem el gràfic d’embarcats per Pclass:
+
+```{r}
+plotbyEmbarkedc<-ggplot(dades,aes(Embarked,fill=Survived))+geom_bar()+facet_wrap(~Pclass) +labs(x="Embarked", y="Passengers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("black","#008000"))+ggtitle("Survived by Embarked and Pclass")
+plotbyEmbarkedc
+```
+Aquí ja podem extreure molta informació. Es pot apreciar com els passatgers de 1a classe van sobreviure més en comparació amb la 2a i 3a classe. O que a Southampton hi havia el percentatge de gent més pobre ja que la 3a classe predomina allà.
+
+```{r}
+ggplot(data = dades[!is.na(dades[1:filas,]$Age),],aes(x=Age,fill=Survived))+geom_histogram(binwidth = 3,position="fill")+ylab("Freq")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("black","#008000"))+ggtitle("Sobreviure en funció d'edat")
+```
+
+Sembla que els nens varen tenir més possibilitat de salvar-se. La gent de 80 anys no la comptarem com que tenien més possibilitat de salvar-se ja que es tracta d'un sol registre, i com podem veure a partir dels 60 i pocs ja no sobrevivia cap passatger.
+
+# Anàlisi de dades
+
+## Contrast d'hipòtesi
+
+En primer lloc, es fa un contrast amb la següent hipòtesi:
+
+$$ H_0 : \mu_{homes} = \mu_{dones}$$
+$$ H_1 : \mu_{homes} < \mu_{dones}$$
+
+El que es vol mirar en aquest contrast és si la supervivència en homes i dones va ser o no la mateixa. Primer es fa un test sobre la variància:
+
+```{r}
+dades$Survived[(dades$Survived=="Yes")] <- 1
+dades$Survived[(dades$Survived=="No")] <- 0
+dades$Survived <- as.numeric(dades$Survived)
+
+var.test(dades$Survived[dades$Sex=="male"], dades$Survived[dades$Sex=="female"] )
+```
+
+S'accepta la hipòtesi d'igualitat de variances en les dues poblacions. Per tant, s'aplica un test de dues mostres independents sobre la mitjana amb variança desconeguda igual.
+
+```{r}
+
+t.test(dades$Survived[dades$Sex=="male"], dades$Survived[dades$Sex=="female"],alternative="less")
+
+```
+
+Amb el p-value obtingut (p<0.05), es descarta la hipòtesi nul·la, i es conclou, tal i com se suposava en la secció de visualització de les dades, que la supervivència en homes va ser menor que en dones.
+
+## Anàlisi de correlacions
+
+Matriu de correlacions (output numèric i gràfic)
+
+```{r}
+if (!require('corrplot')) install.packages('corrplot'); library('corrplot')
+
+nums <- unlist(lapply(dades, is.numeric))
+
+res<-cor(dades[,nums])
+
+corrplot(res,method="color",tl.col="black", tl.srt=30, order = "AOE", 
+         number.cex=0.75,sig.level = 0.01, addCoef.col = "black")
+```
+
+Podem veure com les variables més correlacionades son Pclass-Fare i Sibsp-Parch. Tot i així no és una correlació molt gran.
+
+## Regressió logística
+
+Apliquem la regressió logística per tal de predir les probabilitats de supervivència dels passatgers:
+
+```{r}
+
+logit_model_1 <- glm(formula=Survived~Pclass+Sex+Adult, data=dades, family=binomial)
+summary(logit_model_1)
+
+```
+Fem una predicció de les dades de train per analitzar la corba roc i saber si el nostre model discrimina be les dades.
+
+```{r}
+pr = predict(logit_model_1, dades, type="response")
+r=roc(dades$Survived,pr, data=dades)
+```
+```{r}
+plot(r)
+```
+
+```{r}
+auc(r)
+```
+Podem veure que l'Area under the curve: 0.8481, seguint la regla sabem que si 0,6 <= AUROC < 0,8, podem dir que el model no acaba de discriminar de manera gaire adequada.
+
+```{r}
+new <- read.csv('test.csv',stringsAsFactors = FALSE)
+summary(new)
+```
+
+Principalment hem vist que la variable Age contenia molts valors NA.
+
+Vist això, hem de decidir que fer amb aquests valors, els podriem eliminar pero perdriem registres importants que ens donen informació valuosa.
+De manera que s’ha optat per implementar un mètode d’imputació de valors basat en la similitud o diferencia entre els registres, anomenat ”k-NN-imputation” o k veins més propers. Hem escollit aquest mètode ja que els registres guarden certa relació, tot i que sempre es millor treballar amb dades aproximades que valors buits, ja que tindrem menys marge d’error.
+
+```{r}
+
+suppressWarnings(suppressMessages(library(VIM)))
+new$Age<-kNN(new)$Age
+
+```
+
+```{r}
+summary(new)
+```
+
+```{r}
+new["segment_edat"] <- cut(new$Age, breaks = c(0,10,20,30,40,50,60,70,100), labels = c("0-9", "10-19", "20-29", "30-39","40-49","50-59","60-69","70-79"))
+new["Adult"] <- cut(new$Age, breaks = c(0,17.5,100), labels = c(0,1))
+```
+
+```{r}
+prt = predict(logit_model_1, new, type="response")
+hist(prt)
+```
+
+Podem veure que en el conjunt de test hi ha més probabilitats de morir que de sobreviure, i es concentra un gran nombre de passatgers entre el 40% i 50% de possibilitats de sobreviure.
+
+
+## Modelització predictiva
+
+```{r}
+dades$Survived[(dades$Survived==1)] <- "Yes"
+dades$Survived[(dades$Survived==0)] <- "No"
+```
+
+Per a la futura avaluació del random forest, és necessari dividir el conjunt de dades en un conjunt d’entrenament i un conjunt de prova. El conjunt d’entrenament és el subconjunt del conjunt original de dades utilitzat per a construir un primer model; i el conjunt de prova, el subconjunt del conjunt original de dades utilitzat per a avaluar la qualitat del model.
+
+```{r}
+set.seed(666)
+y <- dades[,1] 
+X <- dades[,c(2,4,5,6,7,8,9,11)]
+```
+
+De manera dinàmica podem definir una manera de separar les dades en funció d’un paràmetre, en aquest cas del “split_prop”. Definim un paràmetre que controla el split de manera dinàmica en el test.
+
+```{r}
+split_prop <- 4
+indexes = sample(1:nrow(dades), size=floor(((split_prop-1)/split_prop)*nrow(dades)))
+trainX<-X[indexes,]
+trainy<-y[indexes]
+testX<-X[-indexes,]
+testy<-y[-indexes]
+```
+
+Després d’una extracció aleatòria de casos és altament recomanable efectuar una anàlisi de dades mínim per a assegurar-nos de no obtenir classificadors esbiaixats pels valors que conté cada mostra.
+
+```{r}
+summary(trainX)
+```
+
+```{r}
+summary(trainy)
+```
+
+```{r}
+summary(testX)
+```
+
+```{r}
+summary(testy)
+```
+
+Es crea el random forest usant les dades d’entrenament .
+
+```{r}
+set.seed(754)
+randForest <- randomForest(factor(trainy) ~ Pclass + Sex + Age + SibSp + Parch + 
+                                            Fare + Embarked + Adult,
+                                            data = trainX)
+```
+
+
+Comprovem la importància de les variables :
+
+```{r}
+importance    <- importance(randForest)
+varImportance <- data.frame(Variables = row.names(importance),
+                            Importance = round(importance[ ,'MeanDecreaseGini'],2))
+rankImportance <- varImportance %>%
+  mutate(Rank = paste0(dense_rank(desc(Importance))))
+ggplot(rankImportance, aes(x = reorder(Variables, Importance),
+    y = Importance, fill = Importance)) +
+  geom_bar(stat='identity') +
+  geom_text(aes(x = Variables, y = 0.5, label = Rank),
+    hjust=0, vjust=0.55, size = 4, colour = 'red') +
+  labs(x = 'Variables') +
+  coord_flip()
+```
+
+És intereessant com el Sexe es la variable més important del dataset, i una de les variables que em pensava que tindria molta importància com es Pclass estigui a la 4a posició.
+
+Una vegada tenim el model, podem comprovar la seva qualitat predient la classe per a les dades de prova que ens hem reservat al principi.
+```{r}
+predicted_model  <- predict(randForest, testX)
+print(sprintf("La precisión del árbol es: %.4f %%",100*sum(predicted_model == testy) / length(predicted_model)))
+```
+Quan hi ha poques classes, la qualitat de la predicció es pot analitzar mitjançant una matriu de confusió que identifica els tipus d’errors comesos.
+
+```{r}
+mat_conf<-table(testy,Predicted=predicted_model)
+mat_conf
+```
+
+Fem la predicció del dataset de test, per tal de predir la variable survival.
+
+```{r}
+predicted_model  <- predict(randForest, new)
+new['Survived'] <- predicted_model
+head(new)
+```
+
+```{r}
+plotbyClass<-ggplot(new,aes(Pclass,fill=Survived))+geom_bar() +labs(x="Class", y="Passengers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("black","#008000"))+ggtitle("Survived by Class")
+plotbyAge<-ggplot(new,aes(segment_edat,fill=Survived))+geom_bar() +labs(x="Age", y="Passengers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("black","#008000"))+ggtitle("Survived by Age")
+plotbySex<-ggplot(new,aes(Sex,fill=Survived))+geom_bar() +labs(x="Sex", y="Passengers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("black","#008000"))+ggtitle("Survived by Sex")
+plotbyEmbarked<-ggplot(new,aes(Embarked,fill=Survived))+geom_bar() +labs(x="Embarked", y="Passengers")+ guides(fill=guide_legend(title=""))+ scale_fill_manual(values=c("black","#008000"))+ggtitle("Survived by Sex")
+plotbyClass
+plotbyAge
+plotbySex
+plotbyEmbarked
+```
+
+
+Amb aquests gràfics podem veure la distribució de gent que va sobreviure o no en funció d'altres variables, i apreciem que segueixen una distribució molt semblant al observat en el dataset de train.
